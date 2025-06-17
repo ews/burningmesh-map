@@ -67,13 +67,18 @@
 
             // --- Configuration Constants ---
             const STREET_LETTERS = ['Esplanade', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
-            const STREET_DEPTHS_FEET = [400, 250, 250, 250, 250, 450, 250, 250, 150, 150, 150];
-            const CAMP_COLORS = ['#EF4444', '#3B82F6', '#22C55E', '#EAB308', '#A855F7', '#EC4899', '#14B8A6'];
+            
+            // New city dimensions configuration
+            const CITY_SIZE_MULTIPLIER = 1.2; // 1.0 = normal, 1.2 = 20% bigger
+            const CITY_DIMENSIONS = {
+                STREET_DEPTHS_FEET: [400, 250, 250, 250, 250, 450, 250, 250, 150, 150, 150].map(d => d * CITY_SIZE_MULTIPLIER),
+                MAN_TO_ESPLANADE_FEET: 2500 * CITY_SIZE_MULTIPLIER,
+                MAN_TO_TEMPLE_FEET: 5000 * CITY_SIZE_MULTIPLIER,
+                RODS_ROAD_RADIUS_FEET: 300 * CITY_SIZE_MULTIPLIER,
+                MAN_TO_FENCE_POINT_FEET: 8500 * CITY_SIZE_MULTIPLIER
+            };
 
-            const MAN_TO_ESPLANADE_FEET = 2500;
-            const MAN_TO_TEMPLE_FEET = 5000;
-            const RODS_ROAD_RADIUS_FEET = 300;
-            const MAN_TO_FENCE_POINT_FEET = 8500; // Updated distance from Man to fence vertex
+            const CAMP_COLORS = ['#EF4444', '#3B82F6', '#22C55E', '#EAB308', '#A855F7', '#EC4899', '#14B8A6'];
 
             const START_ANGLE = (2 - 3) * (Math.PI / 6); 
             const END_ANGLE = (10 - 3) * (Math.PI / 6); 
@@ -97,15 +102,15 @@
                 const canvasWidth = rect.width;
                 const canvasHeight = rect.height;
 
-                const radiiFeet = [MAN_TO_ESPLANADE_FEET];
-                let cumulativeDepth = MAN_TO_ESPLANADE_FEET;
-                STREET_DEPTHS_FEET.forEach(depth => {
+                const radiiFeet = [CITY_DIMENSIONS.MAN_TO_ESPLANADE_FEET];
+                let cumulativeDepth = CITY_DIMENSIONS.MAN_TO_ESPLANADE_FEET;
+                CITY_DIMENSIONS.STREET_DEPTHS_FEET.forEach(depth => {
                     cumulativeDepth += depth;
                     radiiFeet.push(cumulativeDepth);
                 });
 
                 // The scale now needs to accommodate the large trash fence
-                const totalMapHeightFeet = MAN_TO_FENCE_POINT_FEET * 2.2;
+                const totalMapHeightFeet = CITY_DIMENSIONS.MAN_TO_FENCE_POINT_FEET * 2.2;
                 scale = canvasHeight / totalMapHeightFeet;
                 
                 manPos = {
@@ -116,7 +121,7 @@
 
                 templePos = {
                     x: manPos.x,
-                    y: manPos.y - (MAN_TO_TEMPLE_FEET * scale),
+                    y: manPos.y - (CITY_DIMENSIONS.MAN_TO_TEMPLE_FEET * scale),
                     name: "The Temple"
                 };
 
@@ -129,12 +134,12 @@
                         x: manPos.x + esplanadeRadius * Math.cos(sixOClockAngle),
                         y: manPos.y + esplanadeRadius * Math.sin(sixOClockAngle)
                     },
-                    radius: RODS_ROAD_RADIUS_FEET * scale,
+                    radius: CITY_DIMENSIONS.RODS_ROAD_RADIUS_FEET * scale,
                     name: "Rod's Road"
                 };
 
                 // Calculate Trash Fence Vertices based on new constant
-                const fenceRadius = MAN_TO_FENCE_POINT_FEET * scale;
+                const fenceRadius = CITY_DIMENSIONS.MAN_TO_FENCE_POINT_FEET * scale;
                 fenceVertices = [];
                 for (let i = 0; i < 5; i++) {
                     const angle = (-Math.PI / 2) + (i * 2 * Math.PI / 5); // Start at 12 o'clock
