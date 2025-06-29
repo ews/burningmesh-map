@@ -3,419 +3,453 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Black Rock City 2025 - Meshtastic Map</title>
+    <title>Black Rock City Meshtastic Map</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            overflow-x: hidden;
+        body { font-family: 'Inter', sans-serif; }
+        #map-container { position: relative; width: 100%; line-height: 0; }
+        #map-image { width: 100%; height: auto; border-radius: 0.5rem; }
+        #dots-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: all; }
+        #tooltip { position: fixed; display: none; background-color: rgba(17, 24, 39, 0.9); color: white; padding: 10px 15px; border-radius: 8px; font-size: 14px; pointer-events: none; white-space: pre-wrap; z-index: 100; border: 1px solid rgba(255, 255, 255, 0.2); transition: opacity 0.2s; max-width: 300px; }
+        /* Modal styles */
+        #notification-modal { transition: opacity 0.3s ease-in-out; }
+        /* Tab styles */
+        .tab-button.active {
+            border-color: #3b82f6; /* blue-500 */
+            color: #3b82f6;
         }
-        canvas {
-            width: 100%;
-            height: 100%;
-            touch-action: none;
+        select:disabled {
+            background-color: #e5e7eb; /* gray-200 */
+            cursor: not-allowed;
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-200 antialiased flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
+<body class="bg-green-100 dark:bg-gray-900">
 
-    <div class="w-full max-w-7xl mx-auto bg-gray-800 rounded-2xl shadow-2xl p-4 sm:p-6 lg:p-8 flex flex-col">
-        <header class="text-center mb-6">
-            <h1 class="text-3xl sm:text-4xl font-bold text-white">Black Rock City 2025</h1>
-            <p class="text-lg text-amber-300 mt-1">Meshtastic Network Map</p>
+    <div id="tooltip"></div>
+    
+    <!-- Notification Modal -->
+    <div id="notification-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center" onclick="this.classList.add('hidden')">
+        <div id="notification-content" class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm text-center" onclick="event.stopPropagation()">
+            <h3 id="notification-title" class="text-xl font-bold mb-2 text-gray-900 dark:text-white"></h3>
+            <p id="notification-message" class="text-gray-600 dark:text-gray-300"></p>
+            <button id="notification-close" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg w-full">Close</button>
+        </div>
+    </div>
+
+
+    <div class="container mx-auto p-4 sm:p-8 lg:p-12">
+        <header class="text-center mb-4">
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-800 dark:text-white">Black Rock City Meshtastic Network</h1>
+            <p id="subtitle" class="mt-2 text-md sm:text-lg text-gray-600 dark:text-gray-300">A live map of community-submitted camps.</p>
         </header>
         
-        <div class="w-full h-[60vh] md:h-[70vh] lg:h-[80vh] bg-gray-900 rounded-lg overflow-hidden relative" id="canvas-container">
-            <canvas id="brcMapCanvas"></canvas>
-            <div id="tooltip" class="hidden absolute bg-gray-900 bg-opacity-80 backdrop-blur-sm text-white p-3 rounded-lg shadow-lg text-sm pointer-events-none border border-gray-600"></div>
+        <!-- Search Input -->
+        <div class="my-6">
+            <input type="text" id="search-input" placeholder="Search for a camp..." class="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
         </div>
 
-        <footer class="mt-6 text-center text-gray-400">
-            <div class="flex flex-wrap justify-center items-center gap-x-6 gap-y-2">
-                <span class="flex items-center gap-2"><div class="w-4 h-0 border-t-2 border-dashed border-gray-500"></div> Trash Fence</span>
-                <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500"></div> Meshtastic Camp</span>
-                <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-cyan-400"></div> Man</span>
-                <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-violet-400"></div> Temple</span>
-                <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full border-2 border-amber-400"></div> Plaza</span>
-                <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full border-2 border-teal-500"></div> Rod's Road</span>
-                <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-green-500 opacity-30"></div> Walk-In Camping</span>
-            </div>
-            <p class="mt-4 text-sm">Map is a representation and not to perfect scale. Use Greeter guide for navigation.</p>
+        <!-- Tabs -->
+        <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
+            <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="myTab" role="tablist">
+                <li class="mr-2" role="presentation">
+                    <button class="inline-block p-4 border-b-2 rounded-t-lg tab-button active" id="map-tab" type="button" role="tab">Map View</button>
+                </li>
+                <li class="mr-2" role="presentation">
+                    <button class="inline-block p-4 border-b-2 rounded-t-lg border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 tab-button" id="list-tab" type="button" role="tab">List View</button>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- Tab Content -->
+        <div id="tab-content">
+             <!-- Map View -->
+            <main id="map-view" role="tabpanel" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+                <div class="p-2 sm:p-4">
+                    <div id="map-container">
+                        <img id="map-image" src="https://raw.githubusercontent.com/davidbyoung/burningman/main/2024/Map.svg" alt="Map of Black Rock City">
+                    </div>
+                </div>
+            </main>
+            <!-- List View -->
+            <section id="list-view" role="tabpanel" class="hidden overflow-x-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-4">
+                 <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">Camp Name</th>
+                            <th scope="col" class="px-6 py-3">Location</th>
+                            <th scope="col" class="px-6 py-3">Mode</th>
+                            <th scope="col" class="px-6 py-3">Frequency</th>
+                            <th scope="col" class="px-6 py-3">Contact</th>
+                        </tr>
+                    </thead>
+                    <tbody id="list-view-body">
+                        <!-- Rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </section>
+        </div>
+        
+        <!-- Submission Form -->
+        <section class="mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+            <h2 class="text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">Add Your Camp to the Map</h2>
+            <form id="camp-form" class="space-y-4">
+                <div>
+                    <label for="camp_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Camp Name</label>
+                    <input type="text" id="camp_name" required class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <!-- New Location Controls -->
+                <fieldset class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <legend class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Camp Location</legend>
+                    <div id="location-controls" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="street" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Street</label>
+                            <select id="street" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm">
+                                <!-- Options populated by script -->
+                            </select>
+                        </div>
+                        <div>
+                            <label for="time" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Time</label>
+                            <select id="time" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm">
+                                <!-- Options populated by script -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex items-center mt-4">
+                        <input type="checkbox" id="open_camping" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="open_camping" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Open Camping / Unplaced</label>
+                    </div>
+                </fieldset>
+
+
+                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                    <textarea id="description" rows="2" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="number_of_nodes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Number of Nodes</label>
+                        <input type="number" id="number_of_nodes" min="1" value="1" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="frequency_slot" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Frequency Slot</label>
+                        <input type="text" id="frequency_slot" placeholder="e.g., Default, 12" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm">
+                    </div>
+                </div>
+                 <div>
+                    <label for="mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Mode</label>
+                    <select id="mode" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm">
+                        <option>LongFast</option>
+                        <option>LongSlow</option>
+                        <option>MediumFast</option>
+                        <option>MediumSlow</option>
+                        <option>ShortFast</option>
+                        <option>ShortSlow</option>
+                    </select>
+                </div>
+                 <div>
+                    <label for="contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Contact (Discord/Email)</label>
+                    <input type="text" id="contact" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm">
+                </div>
+                <button type="submit" id="submit-button" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Add Camp
+                </button>
+            </form>
+        </section>
+
+        <footer class="text-center mt-8">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                Data is stored in a public Firestore database.
+            </p>
         </footer>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const canvas = document.getElementById('brcMapCanvas');
-            const ctx = canvas.getContext('2d');
-            const tooltip = document.getElementById('tooltip');
-            
-            // --- Meshtastic Camp Data (JSON Structure with multiple locations) ---
-            const campData = [
-                { "name": "NERDS!", "frequency": 42, "nodes": 5, "locations": ["9:30 & A", "2:15 & F"] },
-                { "name": "Mesh Playa", "frequency": 11, "nodes": 8, "locations": ["3:00 & A"] },
-                { "name": "Camp Frequency", "frequency": 88, "nodes": 3, "locations": ["9:15 & G", "9:00 & Esplanade"] },
-                { "name": "The Packet Pushers", "frequency": 123, "nodes": 12, "locations": ["7:45 & F"] },
-                { "name": "Dusty Signal", "frequency": 1, "nodes": 10, "locations": ["4:00 & Esplanade", "4:30 & J"] }
-            ];
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-            let processedNodes = [];
-            let highlightedCampName = null;
+        // --- GLOBAL VARIABLES & CONFIG ---
+        const mapContainer = document.getElementById('map-container');
+        const tooltip = document.getElementById('tooltip');
+        const subtitle = document.getElementById('subtitle');
+        const campForm = document.getElementById('camp-form');
+        const submitButton = document.getElementById('submit-button');
+        const notificationModal = document.getElementById('notification-modal');
+        const notificationTitle = document.getElementById('notification-title');
+        const notificationMessage = document.getElementById('notification-message');
+        const notificationClose = document.getElementById('notification-close');
+        const searchInput = document.getElementById('search-input');
+        
+        // Form location controls
+        const streetSelect = document.getElementById('street');
+        const timeSelect = document.getElementById('time');
+        const openCampingCheckbox = document.getElementById('open_camping');
+        const locationControlsDiv = document.getElementById('location-controls');
 
-            // --- Configuration Constants ---
-            const STREET_LETTERS = ['Esplanade', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
-            
-            // New city dimensions configuration
-            const CITY_SIZE_MULTIPLIER = 1.2; // 1.0 = normal, 1.2 = 20% bigger
-            const CITY_DIMENSIONS = {
-                STREET_DEPTHS_FEET: [400, 250, 250, 250, 250, 450, 250, 250, 150, 150, 150].map(d => d * CITY_SIZE_MULTIPLIER),
-                MAN_TO_ESPLANADE_FEET: 2500 * CITY_SIZE_MULTIPLIER,
-                MAN_TO_TEMPLE_FEET: 5000 * CITY_SIZE_MULTIPLIER,
-                RODS_ROAD_RADIUS_FEET: 300 * CITY_SIZE_MULTIPLIER,
-                MAN_TO_FENCE_POINT_FEET: 8500 * CITY_SIZE_MULTIPLIER
-            };
+        // Tab elements
+        const mapTab = document.getElementById('map-tab');
+        const listTab = document.getElementById('list-tab');
+        const mapView = document.getElementById('map-view');
+        const listView = document.getElementById('list-view');
+        const listViewBody = document.getElementById('list-view-body');
 
-            const CAMP_COLORS = ['#EF4444', '#3B82F6', '#22C55E', '#EAB308', '#A855F7', '#EC4899', '#14B8A6'];
+        const svgNS = "http://www.w3.org/2000/svg";
+        const overlaySvg = document.createElementNS(svgNS, "svg");
+        overlaySvg.setAttribute("viewBox", "0 0 4464.3 4216.9");
+        overlaySvg.id = "dots-overlay";
+        mapContainer.appendChild(overlaySvg);
 
-            const START_ANGLE = (2 - 3) * (Math.PI / 6); 
-            const END_ANGLE = (10 - 3) * (Math.PI / 6); 
-            
-            const COLORS = {
-                BACKGROUND: '#111827', STREET: '#4B5563', TEXT: '#E5E7EB',
-                MAN: '#22D3EE', TEMPLE: '#A78BFA', PLAZA: '#FBBF24',
-                RODS_ROAD: '#14B8A6', TRASH_FENCE: '#6B7280',
-                WALK_IN_CAMPING: 'rgba(34, 197, 94, 0.3)'
-            };
-            
-            let scale, manPos, templePos, radii, rodsRoadInfo, fenceVertices;
+        let allCamps = []; // To store the full list of camps from Firestore
 
-            function setupAndDraw() {
-                const dpr = window.devicePixelRatio || 1;
-                const rect = canvas.getBoundingClientRect();
-                canvas.width = rect.width * dpr;
-                canvas.height = rect.height * dpr;
-                ctx.scale(dpr, dpr);
+        const BRC_MAP_CONFIG = {
+            mapCenter: { x: 2440, y: 1320 },
+            streetRadii: { 'ESPLANADE': 1070, 'A': 1300, 'B': 1450, 'C': 1550, 'D': 1660, 'E': 1790, 'F': 2050, 'G': 2170, 'H': 2310, 'I': 2420, 'J': 2600, 'K': 2500, 'L': 2600 },
+            angleOffset: 0,
+            specialLocations: { 'CENTER CAMP': { x: 2440, y: 2650 }, 'OPEN CAMPING': null }
+        };
 
-                const canvasWidth = rect.width;
-                const canvasHeight = rect.height;
-
-                const radiiFeet = [CITY_DIMENSIONS.MAN_TO_ESPLANADE_FEET];
-                let cumulativeDepth = CITY_DIMENSIONS.MAN_TO_ESPLANADE_FEET;
-                CITY_DIMENSIONS.STREET_DEPTHS_FEET.forEach(depth => {
-                    cumulativeDepth += depth;
-                    radiiFeet.push(cumulativeDepth);
-                });
-
-                // The scale now needs to accommodate the large trash fence
-                const totalMapHeightFeet = CITY_DIMENSIONS.MAN_TO_FENCE_POINT_FEET * 2.2;
-                scale = canvasHeight / totalMapHeightFeet;
-                
-                manPos = {
-                    x: canvasWidth / 2,
-                    y: canvasHeight / 2, // Center the Man
-                    name: "The Man"
-                };
-
-                templePos = {
-                    x: manPos.x,
-                    y: manPos.y - (CITY_DIMENSIONS.MAN_TO_TEMPLE_FEET * scale),
-                    name: "The Temple"
-                };
-
-                radii = radiiFeet.map(r => r * scale);
-                
-                const esplanadeRadius = radii[0];
-                const sixOClockAngle = Math.PI / 2;
-                rodsRoadInfo = {
-                    center: {
-                        x: manPos.x + esplanadeRadius * Math.cos(sixOClockAngle),
-                        y: manPos.y + esplanadeRadius * Math.sin(sixOClockAngle)
-                    },
-                    radius: CITY_DIMENSIONS.RODS_ROAD_RADIUS_FEET * scale,
-                    name: "Rod's Road"
-                };
-
-                // Calculate Trash Fence Vertices based on new constant
-                const fenceRadius = CITY_DIMENSIONS.MAN_TO_FENCE_POINT_FEET * scale;
-                fenceVertices = [];
-                for (let i = 0; i < 5; i++) {
-                    const angle = (-Math.PI / 2) + (i * 2 * Math.PI / 5); // Start at 12 o'clock
-                    fenceVertices.push({
-                        x: manPos.x + fenceRadius * Math.cos(angle),
-                        y: manPos.y + fenceRadius * Math.sin(angle)
-                    });
-                }
-
-                draw();
-            }
-
-            function draw() {
-                ctx.fillStyle = COLORS.BACKGROUND;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                drawTrashFence();
-                drawRodsRoad();
-                drawWalkInCamping();
-                drawAnnularStreets();
-                drawRadialStreets();
-                drawPlazas();
-                drawMeshtasticCamps();
-                drawMan();
-                drawTemple();
-            }
-            
-            function drawTrashFence() {
-                ctx.strokeStyle = COLORS.TRASH_FENCE;
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 5]); // Create a dashed line
-                ctx.beginPath();
-                ctx.moveTo(fenceVertices[0].x, fenceVertices[0].y);
-                for (let i = 1; i < fenceVertices.length; i++) {
-                    ctx.lineTo(fenceVertices[i].x, fenceVertices[i].y);
-                }
-                ctx.closePath();
-                ctx.stroke();
-                ctx.setLineDash([]); // Reset to solid lines for other drawings
-            }
-            
-            function drawAnnularStreets() {
-                ctx.strokeStyle = COLORS.STREET;
-                ctx.lineWidth = 1;
-                ctx.fillStyle = COLORS.TEXT;
-                ctx.font = '11px Inter';
-                ctx.textBaseline = 'middle';
-                radii.forEach((radius, i) => {
-                    ctx.beginPath();
-                    ctx.arc(manPos.x, manPos.y, radius, START_ANGLE, END_ANGLE);
-                    ctx.stroke();
-                    if (STREET_LETTERS[i]) {
-                        ctx.textAlign = 'center';
-                        ctx.fillText(STREET_LETTERS[i], manPos.x, manPos.y + radius + 12);
-                    }
-                });
-            }
-            
-            function drawRodsRoad() {
-                ctx.strokeStyle = COLORS.RODS_ROAD;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(rodsRoadInfo.center.x, rodsRoadInfo.center.y, rodsRoadInfo.radius, 0, 2 * Math.PI);
-                ctx.stroke();
-            }
-
-            function drawRadialStreets() {
-                ctx.strokeStyle = COLORS.STREET;
-                ctx.lineWidth = 1;
-                ctx.fillStyle = COLORS.TEXT;
-                ctx.font = '11px Inter';
-                const innerRadius = radii[0];
-                const outerRadius = radii[radii.length - 1];
-                for (let hour = 2; hour <= 10; hour += 0.5) {
-                    if (hour === 5.5 || hour === 6.5) continue; 
-                    const angle = (hour - 3) * (Math.PI / 6);
-                    ctx.beginPath();
-                    ctx.moveTo(manPos.x + innerRadius * Math.cos(angle), manPos.y + innerRadius * Math.sin(angle));
-                    ctx.lineTo(manPos.x + outerRadius * Math.cos(angle), manPos.y + outerRadius * Math.sin(angle));
-                    ctx.stroke();
-                    const labelRadius = outerRadius + 15;
-                    const labelX = manPos.x + labelRadius * Math.cos(angle);
-                    const labelY = manPos.y + labelRadius * Math.sin(angle);
-                    ctx.save();
-                    ctx.translate(labelX, labelY);
-                    ctx.rotate(angle + Math.PI / 2);
-                    ctx.textAlign = "center";
-                    ctx.fillText(hour.toFixed(2).replace('.50', ':30').replace('.00', ':00'), 0, 0);
-                    ctx.restore();
-                }
-            }
-
-            function drawPlazas() {
-                const plazaHours = [3, 4.5, 7.5, 9];
-                const plazaStreetIndices = [2, 7]; 
-                plazaHours.forEach(hour => {
-                    plazaStreetIndices.forEach(streetIndex => {
-                        const angle = (hour - 3) * (Math.PI / 6);
-                        const radius = radii[streetIndex];
-                        const plazaX = manPos.x + radius * Math.cos(angle);
-                        const plazaY = manPos.y + radius * Math.sin(angle);
-                        ctx.beginPath();
-                        ctx.arc(plazaX, plazaY, 5, 0, 2 * Math.PI);
-                        ctx.strokeStyle = COLORS.PLAZA; 
-                        ctx.lineWidth = 2; 
-                        ctx.stroke();
-                    });
-                });
-            }
-            
-            function drawMan() {
-                // Background circle
-                ctx.beginPath();
-                ctx.arc(manPos.x, manPos.y, 9, 0, 2 * Math.PI);
-                ctx.fillStyle = COLORS.MAN; 
-                ctx.fill();
-                ctx.strokeStyle = 'white'; 
-                ctx.lineWidth = 1.5; 
-                ctx.stroke();
-                
-                // New icon for the Man
-                ctx.fillStyle = 'black';
-                ctx.font = 'bold 12px Inter';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(")'(", manPos.x, manPos.y + 1); // Draw the classic symbol
-            }
-
-            function drawTemple() {
-                // Background circle
-                ctx.beginPath();
-                ctx.arc(templePos.x, templePos.y, 9, 0, 2 * Math.PI);
-                ctx.fillStyle = COLORS.TEMPLE; 
-                ctx.fill();
-                ctx.strokeStyle = 'white'; 
-                ctx.lineWidth = 1.5; 
-                ctx.stroke();
-                
-                // New icon for the Temple
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 14px Inter';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText("▲", templePos.x, templePos.y); // A simple triangle for the temple
-            }
-
-            function drawWalkInCamping() {
-                const campingStartAngle = (2 - 3) * (Math.PI / 6);
-                const campingEndAngle = (5 - 3) * (Math.PI / 6);
-                const innerRadius = radii[radii.length - 1];
-                const outerRadius = innerRadius + 400 * scale; 
-                ctx.beginPath();
-                ctx.arc(manPos.x, manPos.y, innerRadius, campingStartAngle, campingEndAngle);
-                ctx.arc(manPos.x, manPos.y, outerRadius, campingEndAngle, campingStartAngle, true);
-                ctx.closePath();
-                ctx.fillStyle = COLORS.WALK_IN_CAMPING;
-                ctx.fill();
-            }
-
-            // --- Meshtastic Camp Functions ---
-
-            function drawMeshtasticCamps() {
-                processedNodes.forEach(node => {
-                    ctx.fillStyle = node.color;
-                    ctx.beginPath();
-                    ctx.arc(node.coords.x, node.coords.y, 5, 0, 2 * Math.PI);
-                    ctx.fill();
-
-                    // Highlight all nodes of the same camp
-                    if (highlightedCampName && node.name === highlightedCampName) {
-                        ctx.strokeStyle = 'white';
-                        ctx.lineWidth = 2.5;
-                        ctx.stroke();
-                    }
-                });
-            }
-
-            function getCoordsFromLocationString(locationStr) {
-                if (!locationStr) return null;
-                const parts = locationStr.split('&');
-                if (parts.length !== 2) return null;
-
-                const timeStr = parts[0].trim();
-                const streetStr = parts[1].trim().toUpperCase();
-                
-                const timeParts = timeStr.split(':');
-                if (timeParts.length === 0) return null;
-                
-                const hourNum = parseInt(timeParts[0]);
-                const minuteNum = parseInt(timeParts[1] || 0);
-
-                const hour = hourNum + (minuteNum / 60);
-
-                const streetIndex = STREET_LETTERS.findIndex(l => l.toUpperCase() === streetStr);
-                
-                if (streetIndex === -1 || !radii[streetIndex]) return null;
-
-                const radius = radii[streetIndex];
-                const angle = (hour - 3) * (Math.PI / 6);
-                
-                const x = manPos.x + radius * Math.cos(angle);
-                const y = manPos.y + radius * Math.sin(angle);
-                
-                return { x, y };
-            }
-
-            function processCampData() {
-                processedNodes = []; // Clear previous data
-                
-                campData.forEach((camp, index) => {
-                    const color = CAMP_COLORS[index % CAMP_COLORS.length];
-                    if (camp.locations && Array.isArray(camp.locations)) {
-                        camp.locations.forEach(loc => {
-                            const coords = getCoordsFromLocationString(loc);
-                            if (coords) {
-                                processedNodes.push({
-                                    ...camp, // Copy all parent camp data
-                                    location: loc, // Specific location for this node
-                                    coords: coords,
-                                    color: color
-                                });
-                            } else {
-                                console.warn(`Could not parse location "${loc}" for camp: ${camp.name}`);
-                            }
-                        });
-                    }
-                });
-                draw(); // Redraw map with new camp data
-            }
-            
-            // --- Event Listeners ---
-            
-            canvas.addEventListener('mousemove', (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-
-                let foundNode = null;
-                // Iterate backwards to find the top-most node
-                for (let i = processedNodes.length - 1; i >= 0; i--) {
-                    const node = processedNodes[i];
-                    if (node.coords && Math.hypot(mouseX - node.coords.x, mouseY - node.coords.y) < 6) {
-                        foundNode = node;
-                        break;
-                    }
-                }
-                
-                // If the highlighted camp changes, redraw
-                const newHighlightedCamp = foundNode ? foundNode.name : null;
-                if (newHighlightedCamp !== highlightedCampName) {
-                    highlightedCampName = newHighlightedCamp;
-                    draw();
-                }
-
-                if (foundNode) {
-                    tooltip.style.left = `${e.clientX + 15}px`;
-                    tooltip.style.top = `${e.clientY}px`;
-                    tooltip.innerHTML = `
-                        <div class="font-bold" style="color: ${foundNode.color};">${foundNode.name}</div>
-                        <div><span class="font-semibold">Freq Slot:</span> ${foundNode.frequency}</div>
-                        <div><span class="font-semibold">Total Nodes:</span> ${foundNode.nodes}</div>
-                        <div class="text-xs text-gray-400">Repeater at: ${foundNode.location}</div>
-                    `;
-                    tooltip.classList.remove('hidden');
-                } else {
-                    tooltip.classList.add('hidden');
-                }
+        // --- UI FUNCTIONS ---
+        function populateDropdowns() {
+            // Populate Streets
+            const streets = ['Esplanade', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+            streets.forEach(street => {
+                const option = document.createElement('option');
+                option.value = street;
+                option.textContent = street;
+                streetSelect.appendChild(option);
             });
-            
-            // --- Initial Setup ---
-            setupAndDraw();
-            processCampData(); // Load the initial camp data
-            window.addEventListener('resize', () => {
-                setupAndDraw();
-                processCampData();
-            });
+
+            // Populate Times
+            for(let hour = 2; hour <= 10; hour++) {
+                for(let minute = 0; minute < 60; minute += 15) {
+                    if (hour === 10 && minute > 0) continue;
+                    const timeString = `${hour}:${minute.toString().padStart(2, '0')}`;
+                    const option = document.createElement('option');
+                    option.value = timeString;
+                    option.textContent = timeString;
+                    timeSelect.appendChild(option);
+                }
+            }
+        }
+        
+        openCampingCheckbox.addEventListener('change', (e) => {
+            const isDisabled = e.target.checked;
+            streetSelect.disabled = isDisabled;
+            timeSelect.disabled = isDisabled;
+            if (isDisabled) {
+                locationControlsDiv.classList.add('opacity-50');
+            } else {
+                locationControlsDiv.classList.remove('opacity-50');
+            }
         });
+
+        function showNotification(title, message) {
+            notificationTitle.textContent = title;
+            notificationMessage.textContent = message;
+            notificationModal.classList.remove('hidden');
+        }
+        notificationClose.addEventListener('click', () => notificationModal.classList.add('hidden'));
+
+        mapTab.addEventListener('click', () => {
+            mapView.classList.remove('hidden');
+            listView.classList.add('hidden');
+            mapTab.classList.add('active');
+            listTab.classList.remove('active');
+        });
+        listTab.addEventListener('click', () => {
+            listView.classList.remove('hidden');
+            mapView.classList.add('hidden');
+            listTab.classList.add('active');
+            mapTab.classList.remove('active');
+        });
+
+        // --- DATA & DRAWING FUNCTIONS ---
+        function convertBrcToXY(brcAddress) {
+            if (typeof brcAddress !== 'string' || brcAddress.trim() === '') return null;
+            const addr = brcAddress.trim().toUpperCase();
+            if (BRC_MAP_CONFIG.specialLocations[addr] !== undefined) return BRC_MAP_CONFIG.specialLocations[addr]; // Will return null for Open Camping
+            
+            const parts = addr.split(/&|AND/i).map(p => p.trim());
+            if (parts.length !== 2) return null;
+            const streetRaw = parts[0].toUpperCase();
+            const street = streetRaw === 'ESP' ? 'ESPLANADE' : streetRaw;
+            const radius = BRC_MAP_CONFIG.streetRadii[street];
+            if (radius === undefined) return null;
+            const timeParts = parts[1].split(':');
+            if (timeParts.length !== 2) return null;
+            const hours = parseFloat(timeParts[0]);
+            const minutes = parseFloat(timeParts[1]);
+            if (isNaN(hours) || isNaN(minutes)) return null;
+            const decimalTime = hours + (minutes / 60);
+            const baseAngle = (15 - decimalTime) * 30;
+            const finalAngle = baseAngle + BRC_MAP_CONFIG.angleOffset;
+            const angleRad = finalAngle * (Math.PI / 180);
+            const x = BRC_MAP_CONFIG.mapCenter.x + radius * Math.cos(angleRad);
+            const y = BRC_MAP_CONFIG.mapCenter.y - radius * Math.sin(angleRad);
+            return { x, y };
+        }
+
+        function drawNodes(nodeData) {
+            overlaySvg.innerHTML = ''; 
+            const style = document.createElementNS(svgNS, "style");
+            style.textContent = `.node { cursor: pointer; transition: all 0.2s ease-in-out; } .node:hover { r: 70; filter: drop-shadow(0px 0px 50px #ff0); }`;
+            overlaySvg.appendChild(style);
+
+            nodeData.forEach(node => {
+                const coords = convertBrcToXY(node.camp_location);
+                if (!coords) return; // Don't draw a dot if no coordinates (e.g., Open Camping)
+                
+                const circle = document.createElementNS(svgNS, "circle");
+                circle.setAttribute("cx", coords.x);
+                circle.setAttribute("cy", coords.y);
+                circle.setAttribute("r", 50);
+                circle.setAttribute("fill", "#03a9f4");
+                circle.setAttribute("fill-opacity", "0.8");
+                circle.setAttribute("stroke", "#1A202C");
+                circle.setAttribute("stroke-width", "5");
+                circle.classList.add("node");
+                
+                overlaySvg.appendChild(circle);
+
+                circle.addEventListener('mouseover', () => {
+                    let tooltipText = `<b>${node.camp_name || 'N/A'}</b>`;
+                    tooltipText += `<hr class="my-1 border-gray-500">`;
+                    tooltipText += `Location: ${node.camp_location}<br>`;
+                    tooltipText += `Nodes: ${node.number_of_nodes || 'N/A'}<br>`;
+                    tooltipText += `Mode: ${node.mode || 'N/A'}<br>`;
+                    tooltipText += `Frequency: ${node.frequency_slot || 'N/A'}`;
+                    if(node.contact) {
+                       tooltipText += `<br>Contact: ${node.contact}`;
+                    }
+                    tooltip.innerHTML = tooltipText;
+                    tooltip.style.display = 'block';
+                    tooltip.style.opacity = 1;
+                });
+                circle.addEventListener('mousemove', (event) => {
+                    tooltip.style.left = `${event.clientX + 20}px`;
+                    tooltip.style.top = `${event.clientY + 20}px`;
+                });
+                circle.addEventListener('mouseout', () => {
+                    tooltip.style.opacity = 0;
+                    setTimeout(() => tooltip.style.display = 'none', 200);
+                });
+            });
+        }
+        
+        function drawListView(nodeData) {
+            listViewBody.innerHTML = '';
+            nodeData.forEach(node => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b dark:bg-gray-800 dark:border-gray-700';
+                row.innerHTML = `
+                    <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">${node.camp_name || ''}</th>
+                    <td class="px-6 py-4">${node.camp_location || ''}</td>
+                    <td class="px-6 py-4">${node.mode || ''}</td>
+                    <td class="px-6 py-4">${node.frequency_slot || ''}</td>
+                    <td class="px-6 py-4">${node.contact || ''}</td>
+                `;
+                listViewBody.appendChild(row);
+            });
+        }
+
+        // --- MASTER RENDER FUNCTION with Search Filter ---
+        function renderAll() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredCamps = allCamps.filter(camp => 
+                camp.camp_name.toLowerCase().includes(searchTerm)
+            );
+            drawNodes(filteredCamps);
+            drawListView(filteredCamps);
+        }
+        
+        searchInput.addEventListener('input', renderAll);
+
+
+        // --- FIREBASE INITIALIZATION AND LOGIC ---
+        try {
+            const firebaseConfig = {
+              apiKey: "AIzaSyCYiwxxyhDipkCGka9N6o7uw8L9px1kWXY",
+              authDomain: "burningmesh.firebaseapp.com",
+              projectId: "burningmesh",
+              storageBucket: "burningmesh.appspot.com",
+              messagingSenderId: "333553789452",
+              appId: "1:333553789452:web:9dc4c1db54ae655237dc29"
+            };
+            
+            const appId = firebaseConfig.appId;
+
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+
+            onAuthStateChanged(auth, user => {
+                if (user) {
+                    console.log("User is signed in:", user.uid);
+                    subtitle.textContent = "Connected to live database.";
+                    
+                    const campsCol = collection(db, `artifacts/${appId}/public/data/camps`);
+
+                    onSnapshot(campsCol, (snapshot) => {
+                        allCamps = snapshot.docs.map(doc => doc.data());
+                        subtitle.textContent = `Displaying ${allCamps.length} camps from the live database.`;
+                        renderAll();
+                    });
+
+                    campForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        submitButton.disabled = true;
+                        submitButton.textContent = 'Adding...';
+
+                        let locationString;
+                        if(openCampingCheckbox.checked) {
+                            locationString = 'Open Camping';
+                        } else {
+                            locationString = `${streetSelect.value} & ${timeSelect.value}`;
+                        }
+
+                        const newCamp = {
+                            camp_name: document.getElementById('camp_name').value,
+                            camp_location: locationString,
+                            description: document.getElementById('description').value,
+                            number_of_nodes: document.getElementById('number_of_nodes').value,
+                            frequency_slot: document.getElementById('frequency_slot').value,
+                            mode: document.getElementById('mode').value,
+                            contact: document.getElementById('contact').value,
+                            createdAt: serverTimestamp()
+                        };
+
+                        try {
+                            await addDoc(campsCol, newCamp);
+                            showNotification('Success!', 'Your camp has been added to the map.');
+                            campForm.reset();
+                        } catch (error) {
+                            console.error("Error adding document: ", error);
+                            showNotification('Error', 'Could not add your camp. Please try again.');
+                        } finally {
+                            submitButton.disabled = false;
+                            submitButton.textContent = 'Add Camp';
+                        }
+                    });
+
+                } else {
+                     console.log("User is not signed in.");
+                    signInAnonymously(auth);
+                }
+            });
+            
+            // Populate dropdowns on page load
+            populateDropdowns();
+
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+            subtitle.textContent = "Error: Could not connect to the database.";
+        }
     </script>
 </body>
 </html>
