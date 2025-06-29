@@ -311,9 +311,9 @@
                 circle.setAttribute("cx", coords.x);
                 circle.setAttribute("cy", coords.y);
                 circle.setAttribute("r", 50);
-                circle.setAttribute("fill", "#374151"); // gray-700
+                circle.setAttribute("fill", "#aa3344"); // gray-700
                 circle.setAttribute("fill-opacity", "0.8");
-                circle.setAttribute("stroke", "#111827"); // gray-900
+                circle.setAttribute("stroke", "#aa3344"); // gray-900
                 circle.setAttribute("stroke-width", "5");
                 circle.classList.add("node");
                 
@@ -321,7 +321,7 @@
 
                 circle.addEventListener('mouseover', () => {
                     let tooltipText = `<b>${node.camp_name || 'N/A'}</b>`;
-                    tooltipText += `<hr class="my-1 border-gray-500">`;
+                    tooltipText += `<hr class="my-1 border-green-500">`;
                     tooltipText += `Location: ${node.camp_location}<br>`;
                     tooltipText += `Nodes: ${node.number_of_nodes || 'N/A'}<br>`;
                     tooltipText += `Mode: ${node.mode || 'N/A'}<br>`;
