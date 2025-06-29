@@ -53,6 +53,29 @@
         <div class="my-6">
             <input type="text" id="search-input" placeholder="Search for a camp..." class="w-full px-4 py-3 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500">
         </div>
+        
+        <!-- Filter Controls -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+                <label for="mode-filter" class="block text-sm font-medium text-gray-700">Filter by Mode</label>
+                <select id="mode-filter" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm">
+                    <option value="">All Modes</option>
+                    <!-- Options populated by script -->
+                </select>
+            </div>
+            <div>
+                <label for="freq-filter" class="block text-sm font-medium text-gray-700">Filter by Frequency</label>
+                <select id="freq-filter" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm">
+                    <option value="">All Frequencies</option>
+                     <!-- Options populated by script -->
+                </select>
+            </div>
+            <div>
+                <button id="clear-filters" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
 
         <!-- Tabs -->
         <div class="mb-4 border-b border-gray-200">
@@ -72,7 +95,7 @@
             <main id="map-view" role="tabpanel" class="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div class="p-2 sm:p-4">
                     <div id="map-container">
-                        <img id="map-image" src="./Map.svg" alt="Map of Black Rock City">
+                        <img id="map-image" src="https://ews.github.io/burningmesh-map/Map.svg" alt="Map of Black Rock City">
                     </div>
                 </div>
             </main>
@@ -188,6 +211,11 @@
         const notificationClose = document.getElementById('notification-close');
         const searchInput = document.getElementById('search-input');
         
+        // Filter controls
+        const modeFilter = document.getElementById('mode-filter');
+        const freqFilter = document.getElementById('freq-filter');
+        const clearFiltersButton = document.getElementById('clear-filters');
+        
         // Form location controls
         const streetSelect = document.getElementById('street');
         const timeSelect = document.getElementById('time');
@@ -208,6 +236,7 @@
         mapContainer.appendChild(overlaySvg);
 
         let allCamps = []; // To store the full list of camps from Firestore
+        let activeFilters = { mode: '', frequency_slot: '' };
 
         const BRC_MAP_CONFIG = {
             mapCenter: { x: 2440, y: 1320 },
@@ -217,7 +246,7 @@
         };
 
         // --- UI FUNCTIONS ---
-        function populateDropdowns() {
+        function populateLocationDropdowns() {
             // Populate Streets
             const streets = ['Esplanade', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
             streets.forEach(street => {
@@ -238,6 +267,28 @@
                     timeSelect.appendChild(option);
                 }
             }
+        }
+        
+        function populateFilterDropdowns() {
+            const modes = [...new Set(allCamps.map(c => c.mode).filter(Boolean))];
+            const freqs = [...new Set(allCamps.map(c => c.frequency_slot).filter(Boolean))];
+            
+            // Clear existing options except the first "All" option
+            modeFilter.innerHTML = '<option value="">All Modes</option>';
+            freqFilter.innerHTML = '<option value="">All Frequencies</option>';
+
+            modes.sort().forEach(mode => {
+                const option = document.createElement('option');
+                option.value = mode;
+                option.textContent = mode;
+                modeFilter.appendChild(option);
+            });
+            freqs.sort().forEach(freq => {
+                const option = document.createElement('option');
+                option.value = freq;
+                option.textContent = freq;
+                freqFilter.appendChild(option);
+            });
         }
         
         openCampingCheckbox.addEventListener('change', (e) => {
@@ -272,10 +323,36 @@
         });
 
         // --- DATA & DRAWING FUNCTIONS ---
+        const DOT_COLORS = ['#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff', '#9A6324'];
+        
+        function getColorForString(str) {
+            if (!str) return '#374151'; // Default gray for empty/null frequency
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash % DOT_COLORS.length);
+            return DOT_COLORS[index];
+        }
+
+        function calculateRadius(nodeCount) {
+            const num = parseInt(nodeCount, 10) || 1;
+            const minRadius = 45; // Increased from 30
+            const maxRadius = 90;
+            const minNodes = 3;
+            const maxNodes = 20;
+
+            if (num < minNodes) return minRadius;
+            if (num >= maxNodes) return maxRadius;
+
+            const scale = (num - minNodes) / (maxNodes - minNodes);
+            return minRadius + scale * (maxRadius - minRadius);
+        }
+
         function convertBrcToXY(brcAddress) {
             if (typeof brcAddress !== 'string' || brcAddress.trim() === '') return null;
             const addr = brcAddress.trim().toUpperCase();
-            if (BRC_MAP_CONFIG.specialLocations[addr] !== undefined) return BRC_MAP_CONFIG.specialLocations[addr]; // Will return null for Open Camping
+            if (BRC_MAP_CONFIG.specialLocations[addr] !== undefined) return BRC_MAP_CONFIG.specialLocations[addr]; 
             
             const parts = addr.split(/&|AND/i).map(p => p.trim());
             if (parts.length !== 2) return null;
@@ -300,20 +377,20 @@
         function drawNodes(nodeData) {
             overlaySvg.innerHTML = ''; 
             const style = document.createElementNS(svgNS, "style");
-            style.textContent = `.node { cursor: pointer; transition: all 0.2s ease-in-out; } .node:hover { r: 70; filter: drop-shadow(0px 0px 50px #333); }`;
+            style.textContent = `.node { cursor: pointer; transition: all 0.2s ease-in-out; } .node:hover { stroke: #fff; stroke-width: 10px; filter: drop-shadow(0px 0px 50px #fff); }`;
             overlaySvg.appendChild(style);
 
             nodeData.forEach(node => {
                 const coords = convertBrcToXY(node.camp_location);
-                if (!coords) return; // Don't draw a dot if no coordinates (e.g., Open Camping)
+                if (!coords) return; 
                 
                 const circle = document.createElementNS(svgNS, "circle");
                 circle.setAttribute("cx", coords.x);
                 circle.setAttribute("cy", coords.y);
-                circle.setAttribute("r", 50);
-                circle.setAttribute("fill", "#aa3344"); // gray-700
+                circle.setAttribute("r", calculateRadius(node.number_of_nodes));
+                circle.setAttribute("fill", getColorForString(node.frequency_slot)); 
                 circle.setAttribute("fill-opacity", "0.8");
-                circle.setAttribute("stroke", "#aa3344"); // gray-900
+                circle.setAttribute("stroke", "rgba(0,0,0,0.5)"); 
                 circle.setAttribute("stroke-width", "5");
                 circle.classList.add("node");
                 
@@ -321,7 +398,7 @@
 
                 circle.addEventListener('mouseover', () => {
                     let tooltipText = `<b>${node.camp_name || 'N/A'}</b>`;
-                    tooltipText += `<hr class="my-1 border-green-500">`;
+                    tooltipText += `<hr class="my-1 border-gray-500">`;
                     tooltipText += `Location: ${node.camp_location}<br>`;
                     tooltipText += `Nodes: ${node.number_of_nodes || 'N/A'}<br>`;
                     tooltipText += `Mode: ${node.mode || 'N/A'}<br>`;
@@ -360,17 +437,35 @@
             });
         }
 
-        // --- MASTER RENDER FUNCTION with Search Filter ---
+        // --- MASTER RENDER FUNCTION with Search and Filters ---
         function renderAll() {
             const searchTerm = searchInput.value.toLowerCase();
-            const filteredCamps = allCamps.filter(camp => 
-                camp.camp_name.toLowerCase().includes(searchTerm)
-            );
+            const filteredCamps = allCamps.filter(camp => {
+                const searchMatch = camp.camp_name.toLowerCase().includes(searchTerm);
+                const modeMatch = !activeFilters.mode || camp.mode === activeFilters.mode;
+                const freqMatch = !activeFilters.frequency_slot || camp.frequency_slot === activeFilters.frequency_slot;
+                return searchMatch && modeMatch && freqMatch;
+            });
             drawNodes(filteredCamps);
             drawListView(filteredCamps);
         }
         
         searchInput.addEventListener('input', renderAll);
+        modeFilter.addEventListener('change', (e) => {
+            activeFilters.mode = e.target.value;
+            renderAll();
+        });
+        freqFilter.addEventListener('change', (e) => {
+            activeFilters.frequency_slot = e.target.value;
+            renderAll();
+        });
+        clearFiltersButton.addEventListener('click', () => {
+            activeFilters = { mode: '', frequency_slot: '' };
+            modeFilter.value = '';
+            freqFilter.value = '';
+            searchInput.value = '';
+            renderAll();
+        });
 
 
         // --- FIREBASE INITIALIZATION AND LOGIC ---
@@ -400,6 +495,7 @@
                     onSnapshot(campsCol, (snapshot) => {
                         allCamps = snapshot.docs.map(doc => doc.data());
                         subtitle.textContent = `Displaying ${allCamps.length} camps from the live database.`;
+                        populateFilterDropdowns(); // Populate filters after data is loaded
                         renderAll();
                     });
 
@@ -445,8 +541,8 @@
                 }
             });
             
-            // Populate dropdowns on page load
-            populateDropdowns();
+            // Populate location dropdowns on page load
+            populateLocationDropdowns();
 
         } catch (error) {
             console.error("Firebase initialization failed:", error);
